@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Tororo Secret Santa Picker</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      padding: 20px;
+      text-align: center;
+    }
+    .box {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      width: 420px;
+      margin: auto;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      position: relative;
+    }
+    .tororo-title {
+      color: #e74c3c;
+      font-size: 24px;
+      margin-bottom: 5px;
+    }
+    .subtitle {
+      color: #7f8c8d;
+      font-size: 14px;
+      margin-top: 0;
+      margin-bottom: 20px;
+      font-style: italic;
+    }
+    button {
+      padding: 10px 16px;
+      font-size: 15px;
+      cursor: pointer;
+      border-radius: 8px;
+      border: none;
+      background: #007bff;
+      color: white;
+      margin: 5px;
+      transition: all 0.3s;
+    }
+    button:hover:not(:disabled) {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    select {
+      padding: 10px;
+      width: 100%;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    .muted { opacity: 0.5; pointer-events: none; }
+    #reportArea table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    #reportArea th, #reportArea td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    #adminControls { margin-top: 20px; padding-top: 20px; border-top: 2px solid #eee; }
+    #downloadPdfBtn { margin-left: 8px; }
+    /* Added styles for submission status */
+    .submitted { background-color: #e7f7e7; }
+    .not-submitted { background-color: #f7e7e7; }
+    .status-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+    .submitted-dot { background-color: #28a745; }
+    .not-submitted-dot { background-color: #dc3545; }
+    /* Admin PIN styles */
+    .admin-pin-section {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      border: 1px dashed #ccc;
+    }
+    .admin-pin-input {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      width: 100px;
+      text-align: center;
+      font-size: 16px;
+      letter-spacing: 2px;
+      margin-right: 10px;
+    }
+    .admin-btn {
+      background-color: #6c757d;
+    }
+    .admin-btn:hover:not(:disabled) {
+      background-color: #545b62;
+    }
+    .admin-unlock-btn {
+      background-color: #28a745;
+    }
+    .admin-unlock-btn:hover:not(:disabled) {
+      background-color: #218838;
+    }
+    .hidden {
+      display: none;
+    }
+    /* Warning message style */
+    .warning-message {
+      background-color: #fff3cd;
+      border: 1px solid #ffc107;
+      color: #856404;
+      padding: 8px;
+      border-radius: 6px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+    /* Selection instructions */
+    .instructions {
+      font-size: 12px;
+      color: #666;
+      margin: 10px 0;
+      font-style: italic;
+    }
+    /* Tororo theme color accents */
+    .tororo-red {
+      color: #e74c3c;
+    }
+    .tororo-bg {
+      background-color: #e74c3c;
+    }
+    .tororo-bg:hover {
+      background-color: #c0392b;
+    }
+    /* Online status indicator */
+    .online-status {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+    .online { background-color: #28a745; }
+    .offline { background-color: #dc3545; }
+    .syncing { background-color: #ffc107; animation: pulse 1.5s infinite; }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+    .status-indicator {
+      font-size: 12px;
+      color: #666;
+      margin: 10px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* Hidden host hint */
+    .host-hint {
+      opacity: 0.3;
+      transition: opacity 0.3s;
+    }
+    .host-hint:hover {
+      opacity: 1;
+    }
+  </style>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+  <!-- jsPDF for PDF generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <div class="box">
+    <div class="tororo-title">Tororo Secret Santa Number Picker</div>
+    <div class="subtitle">Christmas Gift Exchange 2025</div>
+    
+    <!-- Online Status Indicator -->
+    <div class="status-indicator" id="statusIndicator">
+      <span class="online-status offline" id="onlineDot"></span>
+      <span id="statusText">Connecting to server...</span>
+    </div>
+
+    <label>Select your name:</label><br>
+    <select id="yourName">
+      <option value="">-- choose your name --</option>
+      <option>Reuben</option>
+      <option>Colline</option>
+      <option>Rachel</option>
+      <option>Isaac</option>
+      <option>Shokolo</option>
+      <option>Tendo</option>
+      <option>Jemimah</option>
+      <option>Emmanuel</option>
+      <option>Robert</option>
+      <option>Janervine</option>
+      <option>Philip</option>
+      <option>Charles</option>
+    </select><br>
+
+    <button id="showNumbersBtn" onclick="generateNumbers()">Show Numbers</button>
+    <div class="instructions">You can only click this button once. Choose carefully!</div>
+    
+    <div id="numbers"></div>
+
+    <h3 id="result"></h3>
+
+    <!-- Admin PIN Section (Always visible) -->
+    <div class="admin-pin-section">
+      <h4 style="margin-top: 0; color: #666;">Admin Access</h4>
+      <input type="password" id="adminPin" class="admin-pin-input" 
+             placeholder="PIN" maxlength="4" oninput="validatePinInput(this)">
+      <button id="unlockAdminBtn" class="admin-btn" onclick="checkAdminPin()">Unlock Admin</button>
+      <button id="lockAdminBtn" class="admin-unlock-btn hidden" onclick="lockAdminControls()">Lock Admin</button>
+      <p style="font-size: 11px; color: #888; margin-top: 8px; margin-bottom: 0;">
+        Host only: Enter PIN to view all submissions
+      </p>
+    </div>
+
+    <!-- Admin controls (hidden by default, shown after PIN entry) -->
+    <div id="adminControls" class="hidden">
+      <h3 style="color: #e74c3c;">Tororo Secret Santa Admin Controls</h3>
+      <button id="adminViewBtn">Refresh Report</button>
+      <button id="downloadPdfBtn">Download PDF Report</button>
+      <button onclick="resetAllData()" class="tororo-bg">Reset All Database</button>
+      <button onclick="forceSync()" style="background-color: #17a2b8;">Force Sync Now</button>
+      
+      <div id="reportSummary"></div>
+      <div id="reportArea"></div>
+      
+      <div style="margin-top: 20px; font-size: 12px; color: #666;">
+        <strong>Live Updates:</strong> Submissions automatically sync from all devices.
+      </div>
+    </div>
+
+    <!-- Hidden host hint (only visible on hover) -->
+    <div class="host-hint" style="font-size:12px;color:#666;margin-top:20px;">
+      <div style="opacity: 0.5;">Host controls available</div>
+    </div>
+    
+    <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee; font-size: 11px; color: #95a5a6;">
+      <div>🎄 Tororo Secret Santa Exchange 🎄</div>
+      <div>All submissions sync online in real-time</div>
+    </div>
+  </div>
+
+<script>
+// ============================================
+// FIREBASE CONFIGURATION - YOUR CREDENTIALS
+// ============================================
+const firebaseConfig = {
+  apiKey: "AIzaSyAsswFU1bpXf46tzYD5_vOJWei5zFUbIKQ",
+  authDomain: "tororo-secret-santa.firebaseapp.com",
+  projectId: "tororo-secret-santa",
+  storageBucket: "tororo-secret-santa.firebasestorage.app",
+  messagingSenderId: "458377707090",
+  appId: "1:458377707090:web:b732751bef65bfb826e98b"
+};
+
+// Initialize Firebase
+let db = null;
+try {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  console.log("Firebase initialized successfully with your credentials");
+} catch (error) {
+  console.error("Firebase initialization error:", error);
+  document.getElementById('statusText').textContent = "Firebase connection failed";
+}
+
+// ============================================
+// APPLICATION CONSTANTS AND STATE
+// ============================================
+const names = [
+  "Reuben","Colline","Rachel","Isaac","Shokolo","Tendo",
+  "Jemimah","Emmanuel","Robert","Janervine","Philip","Charles"
+];
+
+const ADMIN_PIN = "2025";
+const EVENT_ID = "tororo_secret_santa_2025";
+
+// Initialize local storage as backup
+if (!localStorage.getItem('secretSantaLocalBackup')) {
+  localStorage.setItem('secretSantaLocalBackup', JSON.stringify({}));
+}
+
+// ============================================
+// ONLINE STATUS MANAGEMENT
+// ============================================
+let isOnline = false;
+let pendingSyncs = [];
+
+function updateOnlineStatus(online) {
+  isOnline = online;
+  const onlineDot = document.getElementById('onlineDot');
+  const statusText = document.getElementById('statusText');
+  
+  if (online) {
+    onlineDot.className = 'online-status online';
+    statusText.textContent = 'Online - All submissions sync to cloud';
+  } else {
+    onlineDot.className = 'online-status offline';
+    statusText.textContent = 'Offline - Using local storage only';
+  }
+}
+
+// Check online status
+window.addEventListener('online', () => updateOnlineStatus(true));
+window.addEventListener('offline', () => updateOnlineStatus(false));
+updateOnlineStatus(navigator.onLine);
+
+// ============================================
+// FIREBASE FUNCTIONS
+// ============================================
+
+async function syncToFirebase(selection) {
+  if (!db || !isOnline) {
+    // Store locally for later sync
+    pendingSyncs.push(selection);
+    localStorage.setItem('secretSantaPendingSyncs', JSON.stringify(pendingSyncs));
+    return false;
+  }
+  
+  try {
+    document.getElementById('onlineDot').className = 'online-status syncing';
+    document.getElementById('statusText').textContent = 'Syncing to cloud...';
+    
+    // Save to Firestore
+    await db.collection('selections').doc(selection.yourName).set({
+      ...selection,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      synced: true,
+      eventId: EVENT_ID
+    });
+    
+    console.log('Successfully synced to Firebase:', selection.yourName);
+    return true;
+  } catch (error) {
+    console.error('Firebase sync error:', error);
+    pendingSyncs.push(selection);
+    localStorage.setItem('secretSantaPendingSyncs', JSON.stringify(pendingSyncs));
+    return false;
+  } finally {
+    updateOnlineStatus(isOnline);
+  }
+}
+
+async function loadFromFirebase() {
+  if (!db || !isOnline) {
+    console.log('Offline, using local data');
+    return JSON.parse(localStorage.getItem('secretSantaLocalBackup') || '{}');
+  }
+  
+  try {
+    const snapshot = await db.collection('selections').where('eventId', '==', EVENT_ID).get();
+    const data = {};
+    snapshot.forEach(doc => {
+      data[doc.id] = doc.data();
+    });
+    
+    // Update local backup
+    localStorage.setItem('secretSantaLocalBackup', JSON.stringify(data));
+    return data;
+  } catch (error) {
+    console.error('Firebase load error:', error);
+    return JSON.parse(localStorage.getItem('secretSantaLocalBackup') || '{}');
+  }
+}
+
+async function getUsedNumbers() {
+  const data = await loadFromFirebase();
+  const used = Array(names.length).fill(false);
+  
+  Object.values(data).forEach(selection => {
+    if (selection.selectedIndex !== undefined && selection.selectedIndex !== null) {
+      used[selection.selectedIndex] = true;
+    }
+  });
+  
+  return used;
+}
+
+async function processPendingSyncs() {
+  if (!pendingSyncs.length) {
+    const stored = localStorage.getItem('secretSantaPendingSyncs');
+    if (stored) pendingSyncs = JSON.parse(stored);
+  }
+  
+  if (pendingSyncs.length && isOnline && db) {
+    console.log(`Processing ${pendingSyncs.length} pending syncs`);
+    const successCount = [];
+    
+    for (const selection of pendingSyncs) {
+      const success = await syncToFirebase(selection);
+      if (success) successCount.push(selection);
+    }
+    
+    // Remove successfully synced items
+    pendingSyncs = pendingSyncs.filter(s => !successCount.includes(s));
+    localStorage.setItem('secretSantaPendingSyncs', JSON.stringify(pendingSyncs));
+    
+    if (successCount.length > 0) {
+      console.log(`Successfully synced ${successCount.length} pending submissions`);
+      // Update the report if admin is viewing
+      if (!document.getElementById('adminControls').classList.contains('hidden')) {
+        await renderReport();
+      }
+    }
+  }
+}
+
+async function forceSync() {
+  const statusText = document.getElementById('statusText');
+  const onlineDot = document.getElementById('onlineDot');
+  
+  onlineDot.className = 'online-status syncing';
+  statusText.textContent = 'Syncing now...';
+  
+  await processPendingSyncs();
+  
+  if (isOnline && db) {
+    statusText.textContent = 'Sync completed!';
+    setTimeout(() => {
+      updateOnlineStatus(isOnline);
+      alert('Sync completed! All pending submissions sent to cloud.');
+    }, 500);
+  } else {
+    updateOnlineStatus(isOnline);
+    alert('Cannot sync: Offline or Firebase not connected.');
+  }
+}
+
+// ============================================
+// MAIN APPLICATION FUNCTIONS
+// ============================================
+
+// PIN validation
+function validatePinInput(input) {
+  input.value = input.value.replace(/[^0-9]/g, '');
+}
+
+function checkAdminPin() {
+  const enteredPin = document.getElementById('adminPin').value;
+  
+  if (enteredPin === ADMIN_PIN) {
+    // Show admin controls
+    document.getElementById('adminControls').classList.remove('hidden');
+    document.getElementById('lockAdminBtn').classList.remove('hidden');
+    document.getElementById('unlockAdminBtn').classList.add('hidden');
+    document.getElementById('adminPin').value = '';
+    document.getElementById('adminPin').placeholder = "✓ Unlocked";
+    document.getElementById('adminPin').disabled = true;
+    
+    // Render the report immediately
+    renderReport();
+    
+    // Show success message
+    document.getElementById('result').innerHTML = 
+      '<span style="color: #28a745;">✓ Admin controls unlocked</span>';
+  } else {
+    alert("Incorrect PIN. Please try again.");
+    document.getElementById('adminPin').value = '';
+    document.getElementById('adminPin').focus();
+  }
+}
+
+function lockAdminControls() {
+  document.getElementById('adminControls').classList.add('hidden');
+  document.getElementById('lockAdminBtn').classList.add('hidden');
+  document.getElementById('unlockAdminBtn').classList.remove('hidden');
+  document.getElementById('adminPin').value = '';
+  document.getElementById('adminPin').placeholder = "PIN";
+  document.getElementById('adminPin').disabled = false;
+  document.getElementById('adminPin').focus();
+}
+
+// Also keep Shift+R shortcut for convenience
+window.addEventListener('keydown', function(e) {
+  if (e.shiftKey && e.key.toLowerCase() === 'r') {
+    e.preventDefault();
+    document.getElementById('adminPin').focus();
+    document.getElementById('result').innerHTML = 
+      '<span style="color: #e74c3c;">Enter PIN in the admin section below</span>';
+  }
+});
+
+async function generateNumbers() {
+  const yourName = document.getElementById("yourName").value;
+  if (!yourName) {
+    alert("Please select your name first.");
+    return;
+  }
+
+  // Check local storage first (as backup)
+  const localData = JSON.parse(localStorage.getItem('secretSantaLocalBackup') || '{}');
+  if (localData[yourName]) {
+    // User has already made a selection
+    document.getElementById("result").innerHTML = 
+      '<div style="color: #28a745; font-weight: bold;">✓ You have already selected a gift recipient.</div>' +
+      '<div style="margin-top: 10px;"><strong>' + yourName + '</strong> → <strong>' + localData[yourName].selectedName + '</strong></div>';
+    
+    const showBtn = document.getElementById('showNumbersBtn');
+    showBtn.disabled = true;
+    showBtn.textContent = "Already Selected ✓";
+    return;
+  }
+
+  // Check if "Show Numbers" was already clicked locally
+  const shownStatus = JSON.parse(localStorage.getItem('secretSantaNumbersShown') || '{}');
+  if (shownStatus[yourName]) {
+    const numbersDiv = document.getElementById("numbers");
+    numbersDiv.innerHTML = '<div class="warning-message">⚠️ You have already viewed the numbers. Please select from the numbers shown below.</div>';
+    
+    // Disable the button
+    const showBtn = document.getElementById('showNumbersBtn');
+    showBtn.disabled = true;
+    showBtn.textContent = "Numbers Already Shown";
+    
+    // Show numbers for selection
+    const used = await getUsedNumbers();
+    showExistingNumbers(used);
+    return;
+  }
+
+  // Mark that this user has clicked "Show Numbers"
+  shownStatus[yourName] = true;
+  localStorage.setItem('secretSantaNumbersShown', JSON.stringify(shownStatus));
+
+  // Disable the "Show Numbers" button immediately
+  const showBtn = document.getElementById('showNumbersBtn');
+  showBtn.disabled = true;
+  showBtn.textContent = "Numbers Shown ✓";
+
+  const numbersDiv = document.getElementById("numbers");
+  numbersDiv.innerHTML = "";
+  
+  // Add a warning message
+  const warning = document.createElement('div');
+  warning.className = 'warning-message';
+  warning.innerHTML = '⚠️ You can only view numbers once! Make your selection carefully.';
+  numbersDiv.appendChild(warning);
+
+  const used = await getUsedNumbers();
+
+  for (let i = 1; i <= names.length; i++) {
+    const btn = document.createElement("button");
+    btn.textContent = i;
+    btn.style.margin = "5px";
+    btn.dataset.used = used[i-1] ? "true" : "false";
+
+    if (used[i-1]) {
+      btn.disabled = true;
+      btn.classList.add('muted');
+    }
+
+    btn.onclick = () => {
+      if (btn.dataset.used === "true") {
+        document.getElementById("result").textContent = "This number has already been used. Pick another one.";
+        return;
+      }
+      revealName(i, yourName, btn);
+    };
+    numbersDiv.appendChild(btn);
+  }
+}
+
+function showExistingNumbers(used) {
+  const numbersDiv = document.getElementById("numbers");
+  
+  // Clear any existing content except the warning message
+  const existingButtons = numbersDiv.querySelectorAll('button');
+  existingButtons.forEach(btn => btn.remove());
+  
+  for (let i = 1; i <= names.length; i++) {
+    const btn = document.createElement("button");
+    btn.textContent = i;
+    btn.style.margin = "5px";
+    btn.dataset.used = used[i-1] ? "true" : "false";
+
+    if (used[i-1]) {
+      btn.disabled = true;
+      btn.classList.add('muted');
+    }
+
+    btn.onclick = async () => {
+      if (btn.dataset.used === "true") {
+        document.getElementById("result").textContent = "This number has already been used. Pick another one.";
+        return;
+      }
+      const yourName = document.getElementById("yourName").value;
+      await revealName(i, yourName, btn);
+    };
+    numbersDiv.appendChild(btn);
+  }
+}
+
+async function revealName(num, yourName, btn) {
+  const yourNameIndex = names.indexOf(yourName);
+  const chosenIndex = num - 1;
+
+  if (chosenIndex === yourNameIndex) {
+    document.getElementById("result").textContent =
+      "This number is NOT allowed because it corresponds to your own name. Pick another number.";
+    return;
+  }
+
+  const selectedName = names[chosenIndex];
+
+  // Disable all buttons after valid selection (prevent re-pick)
+  const allButtons = document.querySelectorAll('#numbers button');
+  allButtons.forEach(b => {
+    b.disabled = true;
+    b.classList.add('muted');
+    b.style.opacity = "0.5";
+  });
+
+  // Mark the chosen button as the active one (highlight)
+  btn.disabled = false;
+  btn.classList.remove('muted');
+  btn.style.opacity = "1";
+  btn.style.backgroundColor = "#28a745";
+  btn.style.color = "white";
+
+  // Create selection object
+  const selection = {
+    yourName: yourName,
+    yourNameIndex: yourNameIndex,
+    selectedName: selectedName,
+    selectedIndex: chosenIndex,
+    timestamp: new Date().toISOString(),
+    eventId: EVENT_ID
+  };
+
+  // Save locally as backup
+  const localBackup = JSON.parse(localStorage.getItem('secretSantaLocalBackup') || '{}');
+  localBackup[yourName] = selection;
+  localStorage.setItem('secretSantaLocalBackup', JSON.stringify(localBackup));
+
+  // Try to sync to Firebase
+  const synced = await syncToFirebase(selection);
+  
+  // Process any pending syncs
+  await processPendingSyncs();
+
+  document.getElementById("result").innerHTML =
+    "<div style='color: #28a745; font-weight: bold;'>✓ Selection saved successfully!</div>" +
+    "<div style='margin-top: 15px; font-size: 18px;'>" +
+    "<strong>" + yourName + "</strong> → <strong>" + selectedName + "</strong>" +
+    "</div>" +
+    "<div style='margin-top: 10px; font-size: 14px; color: #666;'>" +
+    (synced ? "✓ Synced to cloud database" : "⚠️ Saved locally (will sync when online)") +
+    "</div>";
+}
+
+// Admin view report
+const adminViewBtn = document.getElementById('adminViewBtn');
+adminViewBtn.onclick = async function() {
+  await renderReport();
+};
+
+async function renderReport() {
+  const data = await loadFromFirebase();
+  
+  // Calculate submission statistics
+  let submittedCount = 0;
+  let viewedNumbersCount = 0;
+  
+  // Get shown status from local storage (since this is per device)
+  const shownStatus = JSON.parse(localStorage.getItem('secretSantaNumbersShown') || '{}');
+  
+  for (let person of names) {
+    if (data[person]) {
+      submittedCount++;
+    }
+    if (shownStatus[person]) {
+      viewedNumbersCount++;
+    }
+  }
+  
+  // Update summary
+  const summaryHtml = `
+    <div style="background-color: #e9f7ef; padding: 12px; border-radius: 6px; margin: 15px 0; border-left: 4px solid #e74c3c;">
+      <h4 style="margin: 0 0 8px 0; color: #155724;">📊 Tororo Secret Santa 2025 - Live Status</h4>
+      <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+        <div style="margin-bottom: 5px;">
+          <span class="status-dot submitted-dot"></span> <strong>Submitted:</strong> ${submittedCount}
+        </div>
+        <div style="margin-bottom: 5px;">
+          <span style="color: #17a2b8;">●</span> <strong>Viewed Numbers:</strong> ${viewedNumbersCount}
+        </div>
+        <div style="margin-bottom: 5px;">
+          <span class="status-dot not-submitted-dot"></span> <strong>Not Started:</strong> ${names.length - viewedNumbersCount}
+        </div>
+      </div>
+      <div style="margin-top: 10px; font-weight: bold; color: #e74c3c;">
+        🎄 2025 Progress: ${submittedCount}/${names.length} gifts assigned 🎄
+      </div>
+      <div style="margin-top: 5px; font-size: 12px; color: #666;">
+        Status: <span style="color: ${isOnline ? '#28a745' : '#dc3545'}">
+        ${isOnline ? '✓ ONLINE - Real-time updates' : '⚠️ OFFLINE - Showing cached data'}
+        </span>
+      </div>
+    </div>
+  `;
+  document.getElementById('reportSummary').innerHTML = summaryHtml;
+
+  // Create report table
+  let html = "<h4>📋 Live Submissions (From All Devices)</h4><table><tr><th>Person</th><th>Status</th><th>Picked For</th><th>Time Submitted</th></tr>";
+
+  for (let person of names) {
+    const selection = data[person];
+    const hasSubmitted = !!selection;
+    const hasViewedNumbers = !!shownStatus[person];
+    
+    let statusText = "";
+    let statusClass = "";
+    
+    if (hasSubmitted) {
+      statusText = '<span class="status-dot submitted-dot"></span>Submitted';
+      statusClass = "submitted";
+    } else if (hasViewedNumbers) {
+      statusText = '<span style="color: #17a2b8;">●</span> Numbers Viewed';
+      statusClass = "not-submitted";
+    } else {
+      statusText = '<span class="status-dot not-submitted-dot"></span>Not Started';
+      statusClass = "not-submitted";
+    }
+    
+    const pickedFor = selection ? selection.selectedName : "—";
+    const timeSubmitted = selection && selection.timestamp 
+      ? new Date(selection.timestamp.seconds ? selection.timestamp.seconds * 1000 : selection.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+      : "—";
+    
+    html += `<tr class="${statusClass}">
+              <td><strong>${person}</strong></td>
+              <td>${statusText}</td>
+              <td>${pickedFor}</td>
+              <td>${timeSubmitted}</td>
+            </tr>`;
+  }
+
+  html += "</table>";
+  document.getElementById('reportArea').innerHTML = html;
+}
+
+// Download PDF using jsPDF
+const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+downloadPdfBtn.onclick = async function() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  const data = await loadFromFirebase();
+  const title = "Tororo Secret Santa 2025 Report";
+  
+  // Calculate statistics
+  let submittedCount = 0;
+  for (let person of names) {
+    if (data[person]) submittedCount++;
+  }
+  
+  // Title and summary
+  doc.setFontSize(16);
+  doc.setTextColor(231, 76, 60); // Tororo red color
+  doc.text(title, 14, 20);
+  
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`Submitted: ${submittedCount} of ${names.length}`, 14, 30);
+  doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 14, 36);
+  doc.text(`Status: ${isOnline ? 'Online' : 'Offline'}`, 14, 42);
+  
+  // Table header
+  doc.setFontSize(12);
+  doc.setTextColor(0);
+  let y = 50;
+  doc.text("Person", 14, y);
+  doc.text("Status", 70, y);
+  doc.text("Picked For", 120, y);
+  doc.text("Time", 160, y);
+  y += 6;
+  
+  // Draw line
+  doc.setDrawColor(231, 76, 60); // Tororo red color
+  doc.line(14, y, 180, y);
+  y += 5;
+
+  // Table rows
+  doc.setFontSize(10);
+  for (let person of names) {
+    const selection = data[person];
+    const hasSubmitted = !!selection;
+    
+    const status = hasSubmitted ? "✓ Submitted" : "✗ Not Submitted";
+    const pickedFor = selection ? selection.selectedName : "—";
+    const time = selection && selection.timestamp 
+      ? new Date(selection.timestamp.seconds ? selection.timestamp.seconds * 1000 : selection.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+      : "—";
+    
+    doc.text(String(person), 14, y);
+    doc.text(status, 70, y);
+    doc.text(String(pickedFor), 120, y);
+    doc.text(time, 160, y);
+    y += 8;
+    
+    // Add new page if necessary
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+      // Redraw header on new page
+      doc.setFontSize(12);
+      doc.text("Person", 14, y);
+      doc.text("Status", 70, y);
+      doc.text("Picked For", 120, y);
+      doc.text("Time", 160, y);
+      y += 10;
+      doc.setFontSize(10);
+    }
+  }
+
+  // Save PDF
+  const filename = `tororo_secret_santa_2025_${new Date().toISOString().slice(0,10)}.pdf`;
+  doc.save(filename);
+};
+
+// Reset all data (admin only - clears Firebase)
+async function resetAllData() {
+  if (confirm("⚠️ WARNING: This will delete ALL submissions from the CLOUD DATABASE!\n\nThis cannot be undone. Are you sure?")) {
+    if (!db || !isOnline) {
+      alert("Cannot reset: Must be online and connected to Firebase.");
+      return;
+    }
+    
+    try {
+      // Get all documents for this event
+      const snapshot = await db.collection('selections').where('eventId', '==', EVENT_ID).get();
+      
+      if (snapshot.empty) {
+        alert("No data found to reset.");
+        return;
+      }
+      
+      const batch = db.batch();
+      snapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      await batch.commit();
+      
+      // Clear local storage
+      localStorage.removeItem('secretSantaLocalBackup');
+      localStorage.removeItem('secretSantaPendingSyncs');
+      localStorage.removeItem('secretSantaNumbersShown');
+      
+      // Reset UI
+      const showBtn = document.getElementById('showNumbersBtn');
+      showBtn.disabled = false;
+      showBtn.textContent = "Show Numbers";
+      
+      document.getElementById('numbers').innerHTML = '';
+      document.getElementById('result').innerHTML = '';
+      
+      alert("✅ Database cleared successfully! All data has been reset.");
+      await renderReport();
+      
+    } catch (error) {
+      alert("Error clearing database: " + error.message);
+    }
+  }
+}
+
+// ============================================
+// INITIALIZATION
+// ============================================
+
+window.addEventListener('load', async function() {
+  // Check online status
+  updateOnlineStatus(navigator.onLine);
+  
+  // Process any pending syncs
+  await processPendingSyncs();
+  
+  // Check if admin controls were previously unlocked
+  if (localStorage.getItem('adminUnlocked') === 'true') {
+    document.getElementById('adminPin').value = ADMIN_PIN;
+    checkAdminPin();
+  }
+  
+  // Auto-check for user's existing selection
+  const yourName = document.getElementById("yourName");
+  yourName.addEventListener('change', async function() {
+    const name = this.value;
+    if (name) {
+      const data = await loadFromFirebase();
+      if (data[name]) {
+        // User has already made a selection
+        document.getElementById("result").innerHTML = 
+          '<div style="color: #28a745; font-weight: bold;">✓ You have already selected a gift recipient.</div>' +
+          '<div style="margin-top: 10px;"><strong>' + name + '</strong> → <strong>' + data[name].selectedName + '</strong></div>';
+        
+        const showBtn = document.getElementById('showNumbersBtn');
+        showBtn.disabled = true;
+        showBtn.textContent = "Already Selected ✓";
+      } else {
+        // Check local shown status
+        const shownStatus = JSON.parse(localStorage.getItem('secretSantaNumbersShown') || '{}');
+        if (shownStatus[name]) {
+          const showBtn = document.getElementById('showNumbersBtn');
+          showBtn.disabled = true;
+          showBtn.textContent = "Numbers Already Shown";
+        } else {
+          const showBtn = document.getElementById('showNumbersBtn');
+          showBtn.disabled = false;
+          showBtn.textContent = "Show Numbers";
+        }
+      }
+    }
+  });
+  
+  // Periodic sync check
+  setInterval(processPendingSyncs, 30000); // Check every 30 seconds
+  
+  console.log("Tororo Secret Santa 2025 initialized with your Firebase configuration");
+});
+
+</script>
+</body>
+</html>
